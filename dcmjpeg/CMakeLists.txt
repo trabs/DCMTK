@@ -1,0 +1,13 @@
+# declare project
+PROJECT(dcmjpeg)
+
+# recurse into subdirectories
+ADD_SUBDIRECTORY(libsrc)
+ADD_SUBDIRECTORY(libijg8)
+ADD_SUBDIRECTORY(libijg12)
+ADD_SUBDIRECTORY(libijg16)
+
+IF(DCMTK_BUILD_APPS)
+  ADD_SUBDIRECTORY(apps)
+ENDIF(DCMTK_BUILD_APPS)
+

@@ -1,0 +1,6 @@
+header.o: header.cc header.h streams.h util.h config.h intrface.h \
+  decodstr.h procline.h clrtrans.h encodstr.h
+intrface.o: intrface.cc intrface.h header.h streams.h util.h config.h
+jpegls.o: jpegls.cc streams.h util.h config.h intrface.h header.h \
+  decodstr.h procline.h clrtrans.h encodstr.h context.h ctxtrmod.h \
+  lokuptbl.h lltraits.h deftrait.h scan.h
