@@ -177,7 +177,7 @@ ENDFOREACH()
 # Install global headers
 INSTALL(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/config/include/dcmtk/config/osconfig.h
-  DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR} COMPONENT Development
+  DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk COMPONENT Development
   )
 
 # Install headers and static libraries
@@ -185,6 +185,6 @@ FOREACH(lib ${DCMTK_LIBS})
   FILE(GLOB headers_to_install "${CMAKE_CURRENT_SOURCE_DIR}/${lib}/include/dcmtk/${lib}/*.h")
   INSTALL(FILES
     ${headers_to_install}
-    DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/${lib} COMPONENT Development
+    DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/${lib} COMPONENT Development
     )
 ENDFOREACH()
