@@ -10,6 +10,9 @@ SET(DCMTK_PACKAGE_DATE "20100226")
 SET(DCMTK_DEFAULT_CONFIGURATION_DIR "")
 SET(DCMTK_DEFAULT_SUPPORT_DATA_DIR "")
 
+SET(DCMTK_INSTALL_INCLUDE_DIR "include")
+SET(DCMTK_INSTALL_LIB_DIR "lib")
+SET(DCMTK_INSTALL_BIN_DIR "bin")
 
 #-----------------------------------------------------------------------------
 # Output directories.
@@ -150,17 +153,38 @@ IF(WITH_THREADS)
   ENDIF(HAVE_PTHREAD_H)
 ENDIF(WITH_THREADS)
 
+SET(DCMTK_LIBS
+  ofstd
+  oflog
+  dcmdata
+  dcmimgle
+  dcmjpeg
+  dcmimage
+  dcmtls
+  dcmnet
+  dcmwlm
+  dcmqrdb
+  dcmsr
+  dcmpstat
+  dcmsign
+  )
 # recurse into subdirectories
-ADD_SUBDIRECTORY(ofstd)
-ADD_SUBDIRECTORY(oflog)
-ADD_SUBDIRECTORY(dcmdata)
-ADD_SUBDIRECTORY(dcmimgle)
-ADD_SUBDIRECTORY(dcmjpeg)
-ADD_SUBDIRECTORY(dcmimage)
-ADD_SUBDIRECTORY(dcmtls)
-ADD_SUBDIRECTORY(dcmnet)
-ADD_SUBDIRECTORY(dcmwlm)
-ADD_SUBDIRECTORY(dcmqrdb)
-ADD_SUBDIRECTORY(dcmsr)
-ADD_SUBDIRECTORY(dcmpstat)
-ADD_SUBDIRECTORY(dcmsign)
+FOREACH(lib ${DCMTK_LIBS})
+  ADD_SUBDIRECTORY(${lib})
+ENDFOREACH()
+
+
+# Install global headers
+INSTALL(FILES
+  ${CMAKE_CURRENT_SOURCE_DIR}/config/include/dcmtk/config/osconfig.h
+  DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR} COMPONENT Development
+  )
+
+# Install headers and static libraries
+FOREACH(lib ${DCMTK_LIBS})
+  FILE(GLOB headers_to_install "${CMAKE_CURRENT_SOURCE_DIR}/${lib}/include/dcmtk/${lib}/*.h")
+  INSTALL(FILES
+    ${headers_to_install}
+    DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/${lib} COMPONENT Development
+    )
+ENDFOREACH()

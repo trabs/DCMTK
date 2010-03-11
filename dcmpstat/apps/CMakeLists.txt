@@ -17,3 +17,11 @@ ENDFOREACH(PROGRAM)
 FOREACH(PROGRAM dcmp2pgm dcmprscp dcmprscu dcmpsprt dcmpsrcv dcmpssnd)
   TARGET_LINK_LIBRARIES(${PROGRAM} dcmtls dcmdsig ${LIBXML_LIBS} ${OPENSSL_LIBS})
 ENDFOREACH(PROGRAM)
+
+# Install rules
+SET(targets dcmmkcrv dcmmklut dcmp2pgm dcmprscp dcmprscu dcmpsmk dcmpsprt dcmpsrcv dcmpssnd dcmpschk)
+FOREACH(target ${targets})
+  INSTALL(TARGETS ${target}
+    DESTINATION ${DCMTK_INSTALL_BIN_DIR} COMPONENT Development
+    )
+ENDFOREACH()

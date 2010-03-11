@@ -13,3 +13,11 @@ FOREACH(PROGRAM dcmcjpeg dcmdjpeg dcmj2pnm dcmmkdir)
   ENDIF(WIN32)
 ENDFOREACH(PROGRAM)
 TARGET_LINK_LIBRARIES(dcmj2pnm ${LIBTIFF_LIBS} ${LIBPNG_LIBS})
+
+# Install rules
+SET(targets dcmdjpeg dcmj2pnm dcmmkdir)
+FOREACH(target ${targets})
+  INSTALL(TARGETS ${target}
+    DESTINATION ${DCMTK_INSTALL_BIN_DIR} COMPONENT Development
+    )
+ENDFOREACH()

@@ -10,3 +10,11 @@ FOREACH(PROGRAM dcmqrscp dcmqridx dcmqrti)
     TARGET_LINK_LIBRARIES(${PROGRAM}  ws2_32 netapi32 wsock32)
   ENDIF(WIN32)
 ENDFOREACH(PROGRAM)
+
+# Install rules
+SET(targets dcmqrscp dcmqridx dcmqrti)
+FOREACH(target ${targets})
+  INSTALL(TARGETS ${target}
+    DESTINATION ${DCMTK_INSTALL_BIN_DIR} COMPONENT Development
+    )
+ENDFOREACH()
