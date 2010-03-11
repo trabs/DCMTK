@@ -200,3 +200,14 @@ FOREACH(lib ${DCMTK_LIBS})
     DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/${lib} COMPONENT Development
     )
 ENDFOREACH()
+
+# Install rules specific to oflog
+SET(lib oflog)
+SET(lib_include_subdirs config helpers spi)
+FOREACH(lib_include_subdir ${lib_include_subdirs})
+  FILE(GLOB headers_to_install "${CMAKE_CURRENT_SOURCE_DIR}/${lib}/include/dcmtk/${lib}/${lib_include_subdir}/*.h")
+  INSTALL(FILES
+    ${headers_to_install}
+    DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/${lib}/${lib_include_subdir} COMPONENT Development
+    )
+ENDFOREACH()
