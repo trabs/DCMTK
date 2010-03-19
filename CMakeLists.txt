@@ -100,11 +100,11 @@ IF(APPLE)
   SET(DCMTK_WITH_THREADS OFF CACHE BOOL "" FORCE)
 ENDIF(APPLE)
 
-# setting for IA64
+# setting for IA64 / x86_64
 IF(UNIX)
-  IF(CMAKE_SYSTEM_PROCESSOR EQUAL "ia64")
+  IF(CMAKE_SYSTEM_PROCESSOR STREQUAL "ia64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL  "x86_64")
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-  ENDIF(CMAKE_SYSTEM_PROCESSOR EQUAL "ia64")
+  ENDIF(CMAKE_SYSTEM_PROCESSOR STREQUAL "ia64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL  "x86_64")
 ENDIF(UNIX)
 
 # settings for Borland C++
@@ -118,13 +118,13 @@ INCLUDE(${DCMTK_SOURCE_DIR}/CMake/GenerateDCMTKConfigure.cmake)
 CONFIGURE_FILE(${DCMTK_SOURCE_DIR}/osconfig.h.in
                ${DCMTK_BINARY_DIR}/include/dcmtk/config/osconfig.h)
 
-SET(cfplateform unix)
-IF(WIN32)
-  SET(cfplateform win32)
-ENDIF()
-SET(cfplateform_file ${DCMTK_BINARY_DIR}/include/dcmtk/config/cf${cfplateform}.h)
-CONFIGURE_FILE(${DCMTK_SOURCE_DIR}/config/include/dcmtk/config/cf${cfplateform}.h.in
-               ${cfplateform_file})
+# SET(cfplateform unix)
+# IF(WIN32)
+#   SET(cfplateform win32)
+# ENDIF()
+# SET(cfplateform_file ${DCMTK_BINARY_DIR}/include/dcmtk/config/cf${cfplateform}.h)
+# CONFIGURE_FILE(${DCMTK_SOURCE_DIR}/config/include/dcmtk/config/cf${cfplateform}.h.in
+#                ${cfplateform_file})
 
 # find the system png include directory
 FIND_PATH(SYSTEM_PNG_INCLUDE_DIR png.h
@@ -184,13 +184,13 @@ ENDFOREACH()
 
 # Install global headers
 INSTALL(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/config/include/dcmtk/config/osconfig.h
+  ${CMAKE_CURRENT_BINARY_DIR}/include/dcmtk/config/osconfig.h
   DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/config COMPONENT Development
   )
-INSTALL(FILES
-  ${cfplateform_file}
-  DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/config COMPONENT Development
-  )
+# INSTALL(FILES
+#   ${cfplateform_file}
+#   DESTINATION ${DCMTK_INSTALL_INCLUDE_DIR}/dcmtk/config COMPONENT Development
+#   )
 
 # Install headers and static libraries
 FOREACH(lib ${DCMTK_LIBS})
