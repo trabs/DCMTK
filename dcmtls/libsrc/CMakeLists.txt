@@ -4,6 +4,7 @@ SET(UKIT DCMTLS)
 SET(Kit_SRCS
 tlslayer.cxx
 tlstrans.cxx
+tlsscu.cxx
 )
 
 SET(KIT_LIBS)
