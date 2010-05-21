@@ -416,7 +416,15 @@ OFCondition DcmSCU::sendECHORequest( const T_ASC_PresentationContextID& presID )
 
   /* If necessary, find appropriate presentation context */
   if (pcid == 0)
-    pcid = findPresContID(UID_VerificationSOPClass, UID_LittleEndianImplicitTransferSyntax);
+    pcid = findPresContID(UID_VerificationSOPClass, UID_LittleEndianExplicitTransferSyntax);
+  if (pcid == 0)
+  {
+    pcid = findPresContID(UID_VerificationSOPClass, UID_BigEndianExplicitTransferSyntax);   
+  }
+  if (pcid == 0)
+  {
+    pcid = findPresContID(UID_VerificationSOPClass, UID_LittleEndianImplicitTransferSyntax);   
+  }
   if (pcid == 0)
   {
     DCMNET_ERROR("No presentation context found for sending C-ECHO with SOP Class/TS: " 
