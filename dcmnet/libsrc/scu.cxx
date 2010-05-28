@@ -22,9 +22,9 @@
  *  Purpose: Base class for Service Class Users (SCUs)
  *
  *  Last Update:      $Author: onken $
- *  Update Date:      $Date: 2010-04-29 16:13:25 $
+ *  Update Date:      $Date: 2010-06-08 17:54:14 $
  *  Source File:      $Source: /share/dicom/cvs-depot/dcmtk/dcmnet/libsrc/scu.cc,v $
- *  CVS/RCS Revision: $Revision: 1.4 $
+ *  CVS/RCS Revision: $Revision: 1.6 $
  *  Status:           $State: Exp $
  *
  *  CVS/RCS Log at end of file
@@ -106,7 +106,7 @@ OFCondition DcmSCU::initNetwork()
   /* Since the underlying dcmnet structures reserve only 64 bytes for peer
      as well as local host name, we check here for buffer overflow.
    */
-  if ( (m_peer.length() + 5 /* max 65535 */) +1 /* for ":" */ > 63)
+  if ( (m_peer.length() + 5 /* max 65535 */) + 1 /* for ":" */ > 63)
   {
     DCMNET_ERROR("Maximum length of peer host name '" << m_peer << "' is longer than maximum of 57 characters");
     return EC_IllegalCall;
@@ -122,15 +122,14 @@ OFCondition DcmSCU::initNetwork()
   /* Add presentation contexts */
 
   // First, import from config file, if specified
-  DcmAssociationConfiguration *assocConfig = new DcmAssociationConfiguration();
   OFCondition result;
   if (m_assocConfigFilename.length() != 0)
   {
-    result = DcmAssociationConfigurationFile::initialize(*assocConfig, m_assocConfigFilename.c_str());
+    DcmAssociationConfiguration assocConfig;
+    result = DcmAssociationConfigurationFile::initialize(assocConfig, m_assocConfigFilename.c_str());
     if (result.bad())
     {
       DCMNET_WARN("Unable to parse association configuration file " << m_assocConfigFilename << " (ignored): " << result.text());
-      delete assocConfig; assocConfig = NULL;
       return result;
     }
     else
@@ -140,19 +139,17 @@ OFCondition DcmSCU::initNetwork()
       const char *c = m_assocConfigProfile.c_str();
       while (*c)
       {
-        if (! isspace(*c)) profileName += (char) (toupper(*c));
+        if (! isspace(*c)) profileName += OFstatic_cast(char, toupper(*c));
         ++c;
       }
 
-      result = assocConfig->setAssociationParameters(profileName.c_str(), *m_params);
+      result = assocConfig.setAssociationParameters(profileName.c_str(), *m_params);
       if (result.bad())
       {
         DCMNET_WARN("Unable to apply association configuration file" << m_assocConfigFilename <<" (ignored): " << result.text());
-        delete assocConfig; assocConfig = NULL;
         return result;
       }
     }
-    delete assocConfig; assocConfig = NULL;
   }
 
   // Adapt presentation context ID to existing presentation contexts
@@ -204,7 +201,7 @@ OFCondition DcmSCU::initNetwork()
     // goto next free nr, only odd presentation context numbers permitted
     nextFreePresID += 2;
   }
-  
+
   numContexts = ASC_countPresentationContexts(m_params);
   if (numContexts == 0)
   {
@@ -226,7 +223,7 @@ OFCondition DcmSCU::negotiateAssociation()
 
   /* create association, i.e. try to establish a network connection to another */
   /* DICOM application. This call creates an instance of T_ASC_Association*. */
-  DCMNET_DEBUG("Requesting Association");
+  DCMNET_INFO("Requesting Association");
   OFCondition cond = ASC_requestAssociation(m_net, m_params, &m_assoc);
   if (cond.bad()) {
     if (cond == DUL_ASSOCIATIONREJECTED)
@@ -234,30 +231,29 @@ OFCondition DcmSCU::negotiateAssociation()
       T_ASC_RejectParameters rej;
 
       ASC_getRejectParameters(m_params, &rej);
-      DCMNET_DEBUG("Association rejected");
-      ASC_printRejectParameters(msg, &rej);
+      DCMNET_DEBUG("Association Rejected:" << OFendl << ASC_printRejectParameters(msg, &rej));
       return cond;
     }
     else
     {
-      DCMNET_DEBUG("Association Request Failed:\n" << DimseCondition::dump(msg,cond));
+      DCMNET_DEBUG("Association Request Failed: " << DimseCondition::dump(msg, cond));
       return cond;
     }
   }
 
   /* dump the presentation contexts which have been accepted/refused */
-  DCMNET_DEBUG("Association Parameters Negotiated:\n" << ASC_dumpParameters(msg, m_params, ASC_ASSOC_AC));
+  DCMNET_DEBUG("Association Parameters Negotiated:" << OFendl << ASC_dumpParameters(msg, m_params, ASC_ASSOC_AC));
 
   /* count the presentation contexts which have been accepted by the SCP */
   /* If there are none, finish the execution */
   if (ASC_countAcceptedPresentationContexts(m_params) == 0)
   {
-    DCMNET_DEBUG("No acceptable presentation contexts found");
+    DCMNET_ERROR("No Acceptable Presentation Contexts");
     return EC_IllegalCall;
   }
 
   /* dump general information concerning the establishment of the network connection if required */
-  DCMNET_DEBUG("Association Accepted (Max Send PDV: " << (unsigned long)(m_assoc->sendPDVLength));
+  DCMNET_INFO("Association Accepted (Max Send PDV: " << OFstatic_cast(unsigned long, m_assoc->sendPDVLength));
   return EC_Normal;
 }
 
@@ -301,8 +297,8 @@ OFCondition readAssocConfigFromFile(const OFString& filename,
 
 // Returns usable presentation context ID for given abstract syntax and UID
 // transfer syntax UID. 0 if none matches.
-T_ASC_PresentationContextID DcmSCU::findPresContID(const OFString& abstractSyntax,
-                                                   const OFString& transferSyntax)
+T_ASC_PresentationContextID DcmSCU::findPresentationContextID(const OFString& abstractSyntax,
+                                                              const OFString& transferSyntax)
 {
   if (m_assoc == NULL)
     return 0;
@@ -332,13 +328,45 @@ T_ASC_PresentationContextID DcmSCU::findPresContID(const OFString& abstractSynta
 }
 
 
+void DcmSCU::findPresentationContext(const Uint16 presID,
+                                     OFString& abstractSyntax,
+                                     OFString& transferSyntax)
+{
+  transferSyntax.clear();
+  abstractSyntax.clear();
+  if (m_assoc == NULL)
+    return;
+
+  DUL_PRESENTATIONCONTEXT *pc;
+  LST_HEAD **l;
+
+  /* first of all we look for a presentation context
+   * matching both abstract and transfer syntax
+   */
+  l = &m_assoc->params->DULparams.acceptedPresentationContext;
+  pc = (DUL_PRESENTATIONCONTEXT*) LST_Head(l);
+  (void)LST_Position(l, (LST_NODE*)pc);
+  while (pc)
+  {
+     if ( (presID == pc->presentationContextID) && (pc->result == ASC_P_ACCEPTANCE) )
+     {
+       // found a match
+       transferSyntax = pc->acceptedTransferSyntax;
+       abstractSyntax = pc->abstractSyntax;
+       return;
+     }
+     pc = (DUL_PRESENTATIONCONTEXT*) LST_Next(l);
+  }
+  return;   /* not found */
+}
+
+
 Uint16 DcmSCU::nextMessageID()
 {
   if (m_assoc == NULL)
     return 0;
   else return m_assoc->nextMsgID++;
 }
-
 
 
 void DcmSCU::closeAssociation(const OFCondition& abortOrReleaseRequested)
@@ -350,53 +378,52 @@ void DcmSCU::closeAssociation(const OFCondition& abortOrReleaseRequested)
   if (abortOrReleaseRequested == EC_Normal)
   {
     /* release association */
-    DCMNET_DEBUG("Releasing association");
+    DCMNET_INFO("Releasing Association");
     cond = ASC_releaseAssociation(m_assoc);
     if (cond.bad())
     {
-      DCMNET_ERROR("Association release failed :\n" << DimseCondition::dump(msg, cond));
+      DCMNET_ERROR("Association Release Failed: " << DimseCondition::dump(msg, cond));
       return;
     }
   }
   else if (abortOrReleaseRequested == DUL_PEERREQUESTEDRELEASE)
   {
-    DCMNET_ERROR("Protocol Error: peer requested release (Aborting)");
+    DCMNET_ERROR("Protocol Error: Peer requested release (Aborting)");
     cond = ASC_abortAssociation(m_assoc);
-    if (cond.bad()) 
+    if (cond.bad())
     {
-      DCMNET_ERROR("Association abort failed: " << cond.text() << ": " << DimseCondition::dump(msg, cond));
+      DCMNET_ERROR("Association Abort Failed: " << cond.text() << ": " << DimseCondition::dump(msg, cond));
     }
   }
   else if (abortOrReleaseRequested == DUL_PEERABORTEDASSOCIATION)
   {
-    DCMNET_DEBUG("Peer Aborted Association");
+    DCMNET_INFO("Peer Aborted Association");
   }
   else
   {
-    DCMNET_ERROR("DcmSCU failed");
-    DCMNET_ERROR(DimseCondition::dump(msg, abortOrReleaseRequested));
-    DCMNET_DEBUG("Aborting Association");
+    DCMNET_ERROR("DcmSCU Failed: " << DimseCondition::dump(msg, abortOrReleaseRequested));
+    DCMNET_INFO("Aborting Association");
     cond = ASC_abortAssociation(m_assoc);
-    if (cond.bad()) 
+    if (cond.bad())
     {
-      DCMNET_ERROR("Association Abort Failed:" << DimseCondition::dump(msg, cond));
+      DCMNET_ERROR("Association Abort Failed: " << DimseCondition::dump(msg, cond));
     }
   }
 
   /* destroy the association, i.e. free memory of T_ASC_Association* structure. This */
   /* call is the counterpart of ASC_requestAssociation(...) which was called above. */
   cond = ASC_destroyAssociation(&m_assoc);
-  if (cond.bad()) 
+  if (cond.bad())
   {
-    DCMNET_ERROR("Unable to clean up internal association structures" << DimseCondition::dump(msg, cond));
+    DCMNET_ERROR("Unable to clean up internal association structures: " << DimseCondition::dump(msg, cond));
   }
 
   /* drop the network, i.e. free memory of T_ASC_Network* structure. This call */
   /* is the counterpart of ASC_initializeNetwork(...) which was called above. */
   cond = ASC_dropNetwork(&m_net);
-  if (cond.bad()) 
+  if (cond.bad())
   {
-    DCMNET_ERROR("Unable to clean up internal network structures" << DimseCondition::dump(msg, cond));  
+    DCMNET_ERROR("Unable to clean up internal network structures: " << DimseCondition::dump(msg, cond));
   }
 
 #ifdef HAVE_WINSOCK_H
@@ -416,18 +443,18 @@ OFCondition DcmSCU::sendECHORequest( const T_ASC_PresentationContextID& presID )
 
   /* If necessary, find appropriate presentation context */
   if (pcid == 0)
-    pcid = findPresContID(UID_VerificationSOPClass, UID_LittleEndianExplicitTransferSyntax);
+    pcid = findPresentationContextID(UID_VerificationSOPClass, UID_LittleEndianExplicitTransferSyntax);
   if (pcid == 0)
   {
-    pcid = findPresContID(UID_VerificationSOPClass, UID_BigEndianExplicitTransferSyntax);   
+    pcid = findPresentationContextID(UID_VerificationSOPClass, UID_BigEndianExplicitTransferSyntax);
   }
   if (pcid == 0)
   {
-    pcid = findPresContID(UID_VerificationSOPClass, UID_LittleEndianImplicitTransferSyntax);   
+    pcid = findPresentationContextID(UID_VerificationSOPClass, UID_LittleEndianImplicitTransferSyntax);
   }
   if (pcid == 0)
   {
-    DCMNET_ERROR("No presentation context found for sending C-ECHO with SOP Class/TS: " 
+    DCMNET_ERROR("No presentation context found for sending C-ECHO with SOP Class / Transfer Syntax: "
       << dcmFindNameOfUID(UID_VerificationSOPClass) << "/"
       << DcmXfer(UID_LittleEndianImplicitTransferSyntax).getXferName());
     return EC_IllegalCall;
@@ -437,13 +464,13 @@ OFCondition DcmSCU::sendECHORequest( const T_ASC_PresentationContextID& presID )
   Uint16 status;
   cond = DIMSE_echoUser(m_assoc, nextMessageID(), m_blockMode, m_dimseTimeout, &status, NULL);
   if (cond.bad())
-  {  
+  {
     DCMNET_ERROR("Failed sending C-ECHO request or receiving response: " << cond.text());
     return cond;
   }
   else
   {
-    if (status == STATUS_Success) 
+    if (status == STATUS_Success)
       DCMNET_DEBUG("Successfully sent C-ECHO request");
     else
     {
@@ -470,7 +497,7 @@ OFCondition DcmSCU::sendSTORERequest(const T_ASC_PresentationContextID& presID,
   DcmDataset* statusDetail = NULL;
   T_DIMSE_Message msg;
   T_DIMSE_C_StoreRQ* req = &(msg.msg.CStoreRQ);
-  
+
   // Set type of message
   msg.CommandField = DIMSE_C_STORE_RQ;
   /* Set message ID */
@@ -507,12 +534,12 @@ OFCondition DcmSCU::sendSTORERequest(const T_ASC_PresentationContextID& presID,
 
   /* If necessary, find appropriate presentation context */
   if (pcid == 0)
-    pcid = findPresContID(sopClass, DcmXfer(ts).getXferID());
+    pcid = findPresentationContextID(sopClass, DcmXfer(ts).getXferID());
   if (pcid == 0)
   {
     OFString sopname = dcmFindNameOfUID(sopClass.c_str());
     OFString tsname = DcmXfer(ts).getXferName();
-    DCMNET_ERROR("No presentation context found for sending C-STORE with SOP Class/TS: " 
+    DCMNET_ERROR("No presentation context found for sending C-STORE with SOP Class / Transfer Syntax: "
       << (sopname.empty() ? sopClass : sopname) << "/"
       << (tsname.empty() ? DcmXfer(ts).getXferName() : tsname));
     return EC_IllegalCall;
@@ -522,23 +549,23 @@ OFCondition DcmSCU::sendSTORERequest(const T_ASC_PresentationContextID& presID,
 
   cond = DIMSE_sendMessageUsingMemoryData(m_assoc, pcid, &msg, statusDetail, dset, NULL, NULL, NULL);
   delete dcmff; dcmff = NULL;
-  if (cond == EC_Normal) 
+  if (cond == EC_Normal)
   {
     DCMNET_DEBUG("Successfully sent C-STORE request");
   }
   else
-  {  
-    DCMNET_ERROR("Failed sending C-STORE request" << cond.text());
-     return cond;
+  {
+    DCMNET_ERROR("Failed sending C-STORE request: " << cond.text());
+    return cond;
   }
-  
+
   /* Receive response */
-  
+
   T_DIMSE_Message rsp;
   cond = receiveDIMSEResponse(&pcid, &rsp, &statusDetail, NULL /* not interested in the command set */);
   if (cond.bad())
     return cond;
-  
+
   DCMNET_DEBUG("Received response (probably C-STORE-RSP) on presentation context " << pcid);
   if (rsp.CommandField != DIMSE_C_STORE_RSP)
   {
@@ -549,7 +576,7 @@ OFCondition DcmSCU::sendSTORERequest(const T_ASC_PresentationContextID& presID,
   DCMNET_DEBUG("Response has status " << storeRsp.DimseStatus);
   if (statusDetail != NULL)
   {
-    DCMNET_DEBUG("Response has status detail:" << DcmObject::PrintHelper(*statusDetail));
+    DCMNET_DEBUG("Response has status detail:" << OFendl << DcmObject::PrintHelper(*statusDetail));
     delete statusDetail;
   }
   else
@@ -560,24 +587,163 @@ OFCondition DcmSCU::sendSTORERequest(const T_ASC_PresentationContextID& presID,
   return cond;
 }
 
-/*
- * This function sends a DIMSE command and possibly also instance data from a data object via network
- * to another DICOM application.
- *
- * Parameters:
- *   presID          - [in] Presentation context ID identifying the context to be used
- *   msg             - [in] Structure that represents a certain DIMSE command which shall be sent.
- *   statusDetail    - [in] Detailed information with regard to the status information which is captured
- *                          in the status element (0000,0900). Note that the value for element (0000,0900)
- *                          is contained in this variable.
- *   dataObject      - [in] The instance data which shall be sent to the other DICOM application,
- *                          NULL, if there is none
- *   callback        - [in] Pointer to a function which shall be called to indicate progress.
- *   callbackContext - [in] Pointer to data which shall be passed to the progress indicating function
- *   commandSet      - [out] [optional parameter, default = NULL] If this parameter is not NULL
- *                           it will return a copy of the DIMSE command which is sent to the other
- *                           DICOM application.
- */
+
+// Sends a C-FIND Rqeuest on given presentation context
+OFCondition DcmSCU::sendFINDRequest( T_ASC_PresentationContextID presContextID,
+                                     DcmDataset* queryKeys,
+                                     FINDResponses* responses)
+{
+  Uint8 pcid = presContextID;
+
+  // Do some basic validtiy checks
+  if (m_assoc == NULL)
+    return ASC_NULLKEY;
+  if (queryKeys == NULL)
+    return EC_IllegalCall;
+
+  /* Prepare DIMSE data structures for issuing request */
+  OFCondition cond;
+  T_DIMSE_Message msg;
+  DcmDataset* statusDetail = NULL;
+  T_DIMSE_C_FindRQ* req = &(msg.msg.CFindRQ);
+  // Set type of message
+  msg.CommandField = DIMSE_C_FIND_RQ;
+  // Set message ID
+  req->MessageID = nextMessageID();
+  // Announce dataset
+  req->DataSetType = DIMSE_DATASET_PRESENT;
+
+  // Determine SOP Class from presentation context
+  OFString abstractSyntax, ts;
+  findPresentationContext(pcid, abstractSyntax, ts);
+  if (abstractSyntax.empty() || ts.empty())
+    return EC_IllegalCall;
+  strncpy(req->AffectedSOPClassUID, abstractSyntax.c_str(), abstractSyntax.length()+1);
+
+  /* Send request */
+  cond = DIMSE_sendMessageUsingMemoryData(m_assoc, pcid, &msg, statusDetail, queryKeys, NULL, NULL, NULL);
+  if (cond == EC_Normal)
+  {
+    DCMNET_DEBUG("Successfully sent C-FIND request");
+  }
+  else
+  {
+    DCMNET_ERROR("Failed sending C-FIND request: " << cond.text());
+    return cond;
+  }
+
+  /* Receive and handle response */
+  OFBool waitForNextResponse = OFTrue;
+  while (waitForNextResponse)
+  {
+    T_DIMSE_Message rsp;
+    statusDetail = NULL;
+
+    // Receive command set
+    cond = receiveDIMSEResponse(&pcid, &rsp, &statusDetail, NULL /* not interested in the command set */);
+    if (cond.bad())
+      return cond;
+
+    DCMNET_DEBUG("Received response (probably C-FIND-RSP) on presentation context " << pcid);
+    if (rsp.CommandField != DIMSE_C_FIND_RSP)
+    {
+      DCMNET_ERROR("Expected C-FIND-RSP but received DIMSE command " << rsp.CommandField);
+      return cond;
+    }
+
+    // Prepare response package for response handler
+    FINDResponse *findrsp = new FINDResponse();
+    findrsp->m_affectedSOPClassUID = rsp.msg.CFindRSP.AffectedSOPClassUID;
+    findrsp->m_messageIDRespondedTo = rsp.msg.CFindRSP.MessageIDBeingRespondedTo;
+    findrsp->m_status = rsp.msg.CFindRSP.DimseStatus;
+    DCMNET_DEBUG("Response has status " << findrsp->m_status);
+
+    // Receive dataset if there is one (status PENDING)
+    DcmDataset *rspDataset = NULL;
+    if ((findrsp->m_status == 0xFF00 /* STATUS_PENDING */) || (findrsp->m_status == STATUS_FIND_Pending_WarningUnsupportedOptionalKeys) )
+    {
+      // Check if dataset is announced correctly
+      if (rsp.msg.CFindRSP.DataSetType != DIMSE_DATASET_PRESENT)
+      {
+        DCMNET_ERROR("Received C-FIND response with PENDING status but no dataset announced, aborting");
+        delete findrsp;
+        return EC_IllegalCall;
+      }
+
+      // Receive dataset
+      cond = DIMSE_receiveDataSetInMemory(m_assoc, m_blockMode, m_dimseTimeout,
+        &pcid, &rspDataset, NULL /* no progress callback */, NULL /* no progress callback data */);
+      if (cond.bad())
+      {
+        delete findrsp;
+        DCMNET_ERROR("Unable to receive C-FIND dataset on presentation context " << pcid << ": " << cond.text());
+        return EC_IllegalCall;
+      }
+      DCMNET_DEBUG("Received dataset on presentation context " << pcid);
+      findrsp->m_dataset = rspDataset;
+    }
+
+    // Handle C-FIND response (has to handle all possible status flags)
+    cond = handleFINDResponse(pcid, findrsp, waitForNextResponse);
+    if (cond.bad())
+    {
+      DCMNET_WARN("Unable to handle C-FIND response correctly: " << cond.text() << " (ignored)");
+      delete findrsp;
+      cond = EC_Normal;
+      // don't return here but trust the "waitForNextResponse" variable
+    }
+    // if response could be handled successfully, add it to response list
+    else
+    {
+      if (responses != NULL) // only add if desired by caller
+        responses->add(findrsp);
+    }
+  }
+  /* All responses received or break signal occured */
+  return EC_Normal;
+}
+
+
+// Standard handler for C-FIND message responses
+OFCondition DcmSCU::handleFINDResponse(Uint16 presContextID,
+                                       FINDResponse* response,
+                                       OFBool& waitForNextResponse)
+{
+  DCMNET_DEBUG("Handling C-FIND Response");
+  switch (response->m_status) {
+    case STATUS_Pending:
+    case STATUS_FIND_Pending_WarningUnsupportedOptionalKeys:
+        /* in this case the current C-FIND-RSP indicates that */
+        /* there will be some more results */
+        waitForNextResponse = OFTrue;
+        DCMNET_DEBUG("One or more C-FIND outstanding C-FIND responses");
+        break;
+    case STATUS_Success:
+        /* in this case the current C-FIND-RSP indicates that */
+        /* there are no more records that match the search mask */
+        waitForNextResponse = OFFalse;
+        DCMNET_DEBUG("Received final C-FIND response, no more C-FIND responses expected");
+        break;
+    default:
+        /* in all other cases, don't expect further responses to come */
+        waitForNextResponse = OFFalse;
+        DCMNET_DEBUG("Status tells not to wait for further C-FIND responses");
+        break;
+  } //switch
+  return EC_Normal;
+}
+
+
+// Send C-FIND-CANCEL and therefore ends current C-FIND session
+OFCondition DcmSCU::sendCANCELRequest(Uint16 presContextID)
+{
+  return EC_Normal;
+}
+
+
+
+// This function sends a DIMSE command and possibly also instance data to
+// the configured peer DICOM application.
 OFCondition DcmSCU::sendDIMSERequest( const T_ASC_PresentationContextID& presID,
                                       T_DIMSE_Message *msg,
                                       /*DcmDataset *statusDetail,*/ // Brauche ich nur bei RSP nachrichten oder?
@@ -589,7 +755,7 @@ OFCondition DcmSCU::sendDIMSERequest( const T_ASC_PresentationContextID& presID,
   OFCondition cond;
   if (msg == NULL)
     return DIMSE_NULLKEY;
-  
+
   T_ASC_PresentationContextID id=presID; //TODO
   /* call the according DIMSE function to sent the message */
   cond = DIMSE_sendMessageUsingMemoryData(m_assoc, id, msg, NULL/*statusDetail*/, dataObject,
@@ -793,9 +959,91 @@ OFCondition DcmSCU::getDatasetInfo(DcmDataset* dataset,
 }
 
 
+
+/* ************************************************************************ */
+/*                        C-FIND Response classes                           */
+/* ************************************************************************ */
+
+FINDResponses::FINDResponses()
+{
+  // Nothing to do :-)
+}
+
+
+FINDResponses::~FINDResponses()
+{
+  Uint32 numelems = m_responses.size();
+
+  FINDResponse *rsp = NULL;
+  for (Uint32 i=0; i < numelems; i++)
+  {
+    rsp = m_responses.front();
+    if (rsp != NULL)
+    {
+      delete rsp; rsp = NULL;
+    }
+    m_responses.pop_front();
+  }
+}
+
+
+Uint32 FINDResponses::numResults() const
+{
+  return m_responses.size();
+}
+
+
+void FINDResponses::add(FINDResponse* rsp)
+{
+  if (rsp != NULL)
+    m_responses.push_back(rsp);
+}
+
+
+OFListIterator(FINDResponse*) FINDResponses::begin()
+{
+  return m_responses.begin();
+}
+
+
+OFListIterator(FINDResponse*) FINDResponses::end()
+{
+  return m_responses.end();
+}
+
+
+/* ************************** FINDResponse class ****************************/
+
+// Standard constructor
+FINDResponse::FINDResponse() :
+  m_messageIDRespondedTo(0),
+  m_affectedSOPClassUID(),
+  m_dataset(NULL),
+  m_status(0)
+{
+}
+
+// Destructor, cleans up internal memory (datasets if present)
+FINDResponse::~FINDResponse()
+{
+  if (m_dataset != NULL)
+  {
+    delete m_dataset;
+    m_dataset = NULL;
+  }
+}
+
 /*
 ** CVS Log
 ** $Log: scu.cc,v $
+** Revision 1.6  2010-06-08 17:54:14  onken
+** Added C-FIND functionality to DcmSCU. Some code cleanups. Fixed
+** memory leak sometimes occuring during association configuration.
+**
+** Revision 1.5  2010-06-02 16:01:49  joergr
+** Slightly modified some log messages and levels for reasons of consistency.
+** Use type cast macros (e.g. OFstatic_cast) where appropriate.
+**
 ** Revision 1.4  2010-04-29 16:13:25  onken
 ** Made SCU class independent from dcmtls, i.e. outsourced TLS API. Added
 ** direct API support for sending C-STORE requests. Further API changes and
